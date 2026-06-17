@@ -1,0 +1,899 @@
+<!DOCTYPE html>
+<html lang="en">
+<!--
+Don't worry, spiders,
+I keep house
+casually.
+
+Kobayashi Issa
+-->
+
+<head>
+    <meta charset="utf-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="generator" content="The hands of the scribes" />
+    <meta name="viewport"
+        content="width=device-width, height=device-height, initial-scale=1.0, minimum-scale=1.0, user-scalable=0.0" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+
+    <meta property="og:title" content="Walking In Place" />
+    <meta property="og:site_name" content="Walking In Place by Henry Gunderson" />
+    <meta property="og:type" content="book" />
+    <meta property="og:book:author" content="Robin Sloan" />
+
+
+
+
+    <title>Walking In Place</title>
+    <link href="css/web-book-hNzTu57ZtXQg.css" type="text/css" rel="stylesheet" />
+
+    <script type="application/ld+json">
+{
+"@context": "http://schema.org",
+"@type": "Book",
+"name": "Walking in Place",
+"author": "Henry Gunderson",
+}
+</script>
+
+    <script type="text/javascript">
+        // -- Side-to-side scrolling support --
+
+        // This is the function that kicks off a side-to-side page scroll.
+        // It is taken from:
+        // https://github.com/iamdustan/smoothscroll/blob/master/src/smoothscroll.js
+        function smoothScroll(targetX, shouldTurnSlow) {
+            const startTime = performance.now();
+            const startX = document.body.scrollLeft;
+
+            // After this initial invocation, the smoothScrollStep function
+            // calls itself again & again until we've scrolled to targetX.
+            smoothScrollStep({
+                startTime: startTime,
+                startX: startX || 0,
+                targetX: targetX || 0,
+                shouldTurnSlow: shouldTurnSlow
+            });
+        }
+
+        // This easing function returns a relative "how far you should be"
+        // value in the range 0.0-1.0 for an input "time elapsed" value,
+        // also relative, in the range 0.0-1.0
+        function ease(k) {
+            return (-Math.pow(2, -10 * k) + 1);
+        }
+
+        const SCROLL_TIME_FAST = 200; // millis
+        const SCROLL_TIME_SLOW = 1000; // millis
+
+        // This function passes this status object back to itself
+        // on successive animation frames: a way of keeping track
+        // of how far it has scrolled & how far remains.
+        function smoothScrollStep(status) {
+            const scrollTime =
+                status.shouldTurnSlow ? SCROLL_TIME_SLOW : SCROLL_TIME_FAST;
+            let elapsedTime = (performance.now() - status.startTime) / scrollTime;
+
+            // Just in case... avoid elapsed times higher than 1.0:
+            elapsedTime = elapsedTime > 1.0 ? 1.0 : elapsedTime;
+
+            // Apply easing to elapsed time:
+            const easedValue = ease(elapsedTime);
+
+            // Based on that easing curve, where should we be?
+            const currentX =
+                status.startX + (status.targetX - status.startX) * easedValue;
+
+            document.body.scrollLeft = currentX;
+
+            // If we haven't reached our destination yet ...
+            if (Math.abs(currentX - status.targetX) > 2.0) {
+                // ... keep scrolling!
+                requestAnimationFrame(smoothScrollStep.bind(window, status));
+            }
+        }
+
+        // -- Utility --
+
+        // Look up the real pixel value of a property on the book DOM element
+        function getComputed(propertyName) {
+            return Number(
+                getComputedStyle(bookElement)
+                    .getPropertyValue(propertyName)
+                    .replace("px", ""),
+            );
+        }
+
+        // Look up the positioning rect of a DOM element
+        function getRect(element) {
+            // terrible hack for Firefox, which treats getBoundingClientRect as an
+            // inner dimension for some unknown reason:
+            const rects = element.getClientRects();
+            return rects[rects.length - 1];
+        }
+
+        // -- Page turning --
+
+        // First: here are legible aliases for our page turn functions.
+        // The idea is to "say what you really want" elsewhere in this code
+        // rather than cryptically call turnPage(-1, false)
+
+        function turnPageForward() {
+            turnPage(1, false);
+        }
+
+        function turnPageBack() {
+            turnPage(-1, false);
+        }
+
+        function snapToCurrentPage() {
+            turnPage(0, true);
+        }
+
+        // As you can tell from the functions above, turnPage accepts
+        // a turnDirection parameter that can be
+        //  1: turn forward
+        // -1: turn back
+        //  0: turn to "this page", i.e., re-center it
+        function turnPage(turnDirection, shouldTurnSlow) {
+            // Where are we?
+            const currentLeftOffset = document.body.scrollLeft;
+
+            // How wide is one page, currently?
+            // TODO: maybe change these to `page*` instead of `column*`
+            const columnWidth = getComputed("column-width");
+            const columnGap = getComputed("column-gap");
+            const columnTotal = columnWidth + columnGap;
+
+            // Where are we, then, in terms of pages?
+            const currentPageNumber = Math.round(currentLeftOffset / columnTotal);
+
+            // Where do we want to be?
+            const targetPageNumber = currentPageNumber + turnDirection;
+
+            // Working backwards, what's the x-coordinate of the left edge
+            // of our target page number?
+            let closestPageEdge = targetPageNumber * columnTotal;
+
+            // This is an edge case that I don't totally remember ...
+            // It'll return to me at some point, I'm sure.
+            // 8.0 pixels is for sure a magic number, sorry!
+            if (Math.abs(closestPageEdge - currentLeftOffset) < 8.0) {
+                closestPageEdge += columnTotal * turnDirection;
+                writePageNumber(targetPageNumber + 1); // hacky
+            }
+
+            // Hold up -- you can't turn to the next page if you're at the
+            // end of the book!
+            if (
+                (turnDirection > 0) &&
+                (getRect(endElement).x <= (window.innerWidth + columnGap))
+            ) {
+                // If that's the case, return without scrolling:
+                return;
+            }
+
+            // Now it's OK to write our page number:
+            writePageNumber(targetPageNumber);
+
+            // If we previously navigated using a chapter link, we want to clear
+            // that hash out of the URL, because we're now on a different page:
+            window.location.hash = "";
+
+            // After all this, we are finally ready to scroll:
+            smoothScroll(closestPageEdge, shouldTurnSlow);
+        }
+
+        // This function turns, without any animation, to a particular numbered page.
+        // It's a bit flaky because "page numbers" can change completely based on
+        // browser size -- this is a responsive, reflowable layout.
+        // But, better to have the capability than not ... maybe?
+        function turnToPage(pageNumber) {
+            const columnWidth = getComputed("column-width");
+            const columnGap = getComputed("column-gap");
+            const columnTotal = columnWidth + columnGap;
+
+            let pageEdge = pageNumber * columnTotal;
+            if (pageEdge > bookElement.scrollWidth) {
+                // In this case, the page number is greater than total number of pages
+                // currently available. Again, this isn't uncommon, because of reflow.
+                // So, we'll just go the end of the book.
+                pageEdge = bookElement.scrollWidth - (columnTotal + columnWidth);
+            }
+
+            // Display the cute bookmark so people get the idea that they have
+            // returned to a saved location:
+            const bookmarkElement = document.querySelector("div.bookmark");
+            bookmarkElement.style.display = "block";
+            bookmarkElement.style.left = `${pageEdge + columnWidth / 2.0}px`;
+
+            document.body.scrollLeft = pageEdge;
+        }
+
+        // This function turns, without any animation, to a particular hash,
+        // which we use to link directly to a chapter.
+        // The function expects the raw hash from the URL -- # included.
+        function turnToChapter(rawHash) {
+            // Convert the raw hash to the element id scheme used in the book HTML:
+            const id = "chapter_" + rawHash.replace("#", "");
+
+            // Now, find the <h2> element with that id.
+            let targetHeading =
+                Array.from(document.querySelectorAll("h2")).find((heading) => {
+                    return heading.getAttribute("id") == id;
+                });
+
+            targetHeading.scrollIntoView();
+
+            // This gets us part of the way there ... but we have more to do.
+            // scrollIntoView() doesn't know the niceties of our layout --
+            // as long as the targetHeading is barely visible, it's happy.
+            // WE HOWEVER ARE NOT.
+            // To calculate the misalignment, we need to know where, in window
+            // coordinates, the left edge of our page should be.
+            // |------------------- window.innerWidth -------------------|
+            //       this edge -> | bookElement.width |
+            const wherePageEdgeShouldBe =
+                (window.innerWidth - getRect(bookElement).width) / 2.0;
+
+            // Next, we see how far off the mark we are:
+            const misalignment = getRect(targetHeading).x - wherePageEdgeShouldBe;
+
+            // Finally, we compensate:
+            document.body.scrollLeft += misalignment;
+        }
+
+        // -- TOC and config --
+        // These functions are all very simple and, I believe, self-explanatory.
+
+        function setTextScale(scale) {
+            document.documentElement.style.setProperty(
+                "--font-size",
+                `${BASE_FONT_SIZE * scale}px`,
+            );
+        }
+
+        function toggleNav() {
+            if (navElement == null) {
+                return;
+            }
+
+            if (navElement.className == "invisible") {
+                navElement.className = "visible";
+            } else {
+                navElement.className = "invisible";
+            }
+        }
+
+        function writePageNumber(pageNumber) {
+            window.localStorage.setItem("pageNumber", pageNumber);
+        }
+
+        function readPageNumber() {
+            const pageNumber = Number(window.localStorage.getItem("pageNumber"));
+            if (pageNumber > 1) {
+                turnToPage(pageNumber);
+            }
+        }
+
+        // -- Setup --
+
+        const CLICK_DEBOUNCE_TIME = 50; // millis
+        const LONG_PRESS_TIME = 250; // millis
+
+        const BASE_FONT_SIZE = 18.0; // px
+
+        // These are globals where we will cache these elements
+        // so we don't have to querySelector() them every time:
+        var bookElement;
+        var navElement;
+        var endElement;
+
+        // These are globals used to keep track of a few things used below:
+        var scrollTimer;
+        var lastMouseDown = Date.now();
+        var lastClick = Date.now();
+
+        // Here is the big setup function:
+        document.addEventListener("DOMContentLoaded", (e) => {
+            bookElement = document.querySelector("div.book");
+            navElement = document.querySelector("nav"); // This might be null!
+            endElement = document.querySelector("p.last-page");
+
+            // Does the URL have a hash, indicating a link directly to a chapter?
+            // The length check is > 1 because an empty hash "#" is length 1
+            if (window.location.hash.length > 1) {
+                turnToChapter(window.location.hash);
+            } else {
+                readPageNumber();
+            }
+
+            // Here's the scroll "re-adjustment" handler
+            // After a free scroll, we wait for a beat (1000 millis, to be exact)
+            // and then snap our scroll position to a page edge.
+            // We put this here in the DOMContentLoaded handler because we need
+            // this `body` element to be ready!
+            document.body.addEventListener("scroll", (e) => {
+                // Were we already waiting to snap? If so, forget that:
+                if (scrollTimer) {
+                    clearTimeout(scrollTimer);
+                }
+
+                // Wait ... then snap:
+                scrollTimer = setTimeout(() => {
+                    snapToCurrentPage();
+                }, 1000);
+            });
+
+            // Handle click on the TOC button, if it exists:
+            document.querySelector("button.toc-button")?.addEventListener("click", (e) => {
+                toggleNav();
+                e.stopPropagation();
+            });
+
+            // Handle click on the close button, if it exists:
+            document.querySelector("div.close-button")?.addEventListener("click", (e) => {
+                toggleNav();
+                e.stopPropagation();
+            });
+
+            // Add click handlers to the chapter titles in the TOC, if they exist:
+            document.querySelectorAll("nav a")?.forEach((link) => {
+                link.addEventListener("click", (e) => {
+                    toggleNav();
+                    turnToChapter(e.target.getAttribute("href"));
+                    e.stopPropagation();
+                });
+            });
+
+            // Add click handlers to the text scale options in the TOC, if they exist:
+            document.querySelectorAll("nav div.controls button")?.forEach((button) => {
+                const size = `${BASE_FONT_SIZE * button.dataset.scale}px`;
+                button.style.fontSize = size;
+
+                button.addEventListener("click", (e) => {
+                    setTextScale(e.target.dataset.scale);
+                    e.stopPropagation();
+                });
+            });
+
+            // This next bit is hacky, but/and it allows us to respond appropriately
+            // to user changes to overall browser font size, e.g. with ⌘+ and ⌘-.
+            // We want our font size options to be built "around" that user-selected
+            // font size ... right? (I might be overthinking this.)
+            // We have to wrap this in a setTimeout because the computed font size,
+            // reflecting the user-selected font size, isn't available at the moment
+            // DOMContentLoaded fires -- shocking!
+            setTimeout(function () {
+                // So what IS the font-size of this document, reflecting any changes
+                // by the user?
+                let realFontSize = Number(
+                    getComputedStyle(document.documentElement)
+                        .getPropertyValue("font-size")
+                        .replace("px", ""),
+                );
+
+                // So ... basically we now redo what we did above, setting up those
+                // click handlers for the text scale options.
+                // (if they exist)
+                document.querySelectorAll("nav div.controls button")?.forEach((button) => {
+                    const size = `${realFontSize * button.dataset.scale}px`;
+                    button.style.fontSize = size;
+
+                    button.addEventListener("click", (e) => {
+                        setTextScale(e.target.dataset.scale);
+                        e.stopPropagation();
+                    });
+                });
+            }, 1000); // end of setTimeout
+
+            // TODO: The more I think about the text scale bit above, the more I think
+            // it is dumb. Maybe there's a better/cleaner approach.
+        });
+
+
+        // -- More controls --
+        // We can set these up outside the DOMContentLoaded handler, they are eternal
+
+        // Handle keyboard controls:
+        document.addEventListener("keydown", (e) => {
+            // Left arrow
+            if (event.keyCode === 37) {
+                e.preventDefault();
+                turnPageBack();
+            }
+            // Right arrow, space bar
+            if ((event.keyCode === 39) || (event.keyCode === 32)) {
+                e.preventDefault();
+                turnPageForward();
+            }
+        });
+
+        // Handle the scroll wheel:
+        document.addEventListener("wheel", (e) => {
+            // Don't override the scroll wheel if the user
+            // is browsing the TOC.
+            // Be sure to use safe navigation for the TOC element:
+            if (navElement?.className == "visible") {
+                return;
+            }
+
+            // I don't remember why we do this check
+            if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+                e.preventDefault();
+                document.body.scrollLeft += e.deltaY;
+            }
+        }, { passive: false });
+
+        // Keep track of mousedowns, to calculate timings for events below:
+        document.addEventListener("mousedown", function (e) {
+            lastMouseDown = Date.now();
+        });
+
+        // Handle clicks, which generally turn the page -- ALTHOUGH you might notice
+        // that most of this code is devoted to looking for reasons NOT to turn
+        // the page ...
+        document.addEventListener("click", function (e) {
+            const now = Date.now();
+
+            // Don't turn the page on long press (e.g., mobile text selection).
+            // "click" events register on mouseup, so we are saying, if it's been
+            // a looong time since mousedown ... don't turn the page
+            if ((now - lastMouseDown) > LONG_PRESS_TIME) {
+                return;
+            }
+
+            // Don't turn the page on the second click in a double-click:
+            if ((now - lastClick) < CLICK_DEBOUNCE_TIME) {
+                return;
+            }
+
+            // But do record the timing of this click:
+            lastClick = now;
+
+            // (Why are people double-clicking? I don't know.)
+
+            // Don't turn page if the user clicked a link:
+            if (e.target.tagName == "A") {
+                return;
+            }
+
+            // Don't turn the page if the user is selecting text:
+            if (window.getSelection().toString().length > 0) {
+                return;
+            }
+
+            // Okay, there's no avoiding it ... turn the page.
+            // Clicks in the left 1/3 of the screen turn back,
+            // click in the right 2/3 turn forward
+            if (e.clientX < (window.innerWidth / 3.0)) {
+                turnPageBack();
+            } else {
+                turnPageForward();
+            }
+        });
+
+        // Detect changes in the URL hash, which we use for chapter titles.
+        // Note that this is a window event, not a document event
+        window.addEventListener("hashchange", (e) => {
+            if (window.location.hash.length > 1) {
+                turnToChapter(window.location.hash);
+            }
+        });
+
+    </script>
+</head>
+
+<!--
+When it comes to HTML readability, I find excessive indentation less helpful
+than thoughtful spacing. Generally, I only use 1-2 levels of indentation total.
+-->
+
+<body>
+
+    <nav class="invisible">
+
+        <div class="controls">
+            <button data-scale="0.8">A</button>
+            <button data-scale="1.0">A</button>
+            <button data-scale="1.2">A</button>
+            <button data-scale="1.4">A</button>
+            <button data-scale="2.0">A</button>
+        </div>
+
+        <div class="toc">
+
+            <div class="close-button">
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" x="0px"
+                    y="0px" width="100%" height="100%" viewBox="0 0 10 10" xml:space="preserve">
+                    <g>
+                        <line x1="0" y1="0" x2="10" y2="10" vector-effect="non-scaling-stroke" />
+                        <line x1="10" y1="0" x2="0" y2="10" vector-effect="non-scaling-stroke" />
+                    </g>
+                </svg>
+            </div> <!-- close-button -->
+
+        <h1>Table of Contents</h1>
+            <ol>
+                <li><a href="#note_to_readers">Note to Readers</a></li>
+                <li><a href="#Day_One">Day One</a></li>
+                <li><a href="#Day_Two">Day Two</a></li>
+                <li><a href="#Day_Three">Day Three</a></li>
+                <li><a href="#colophon">Colophon</a></li>
+            </ol>
+        </div>
+
+    </nav>
+
+    <div class="print-cover">
+        <div class="title">
+            <h1><span>&nbsp;Walking</span> <span>In</span> <span>Place&nbsp;</span> </h1>
+            <h1>Henry Gunderson</h1>
+        </div>
+    </div> <!-- print-cover -->
+
+    <div class="book">
+        
+      <div>
+            <img src="img/WIP.png" alt="" />
+        </div>
+        <div class="tutorial">
+            <h2>How to read</h2>
+            <p><i>On a phone:</i><br />Tap the edges of the page</p>
+            <p><i>On a computer:</i><br />Click the edges of the page, or use the arrow keys, the&nbsp;space&nbsp;bar,
+                the&nbsp;trackpad, or&nbsp;the&nbsp;scroll&nbsp;wheel</p>
+            <p><i>On paper:</i></br>Print it out</p>
+            <p>Basically, <small>everything works</small></p>
+        </div> <!-- tutorial -->
+
+        <div class="title">
+        
+            <h1><span>&nbsp;Walking</span> <span>In</span> <span>Place&nbsp;</span> </h1>
+            <h1>Henry Gunderson</h1>
+             </div>
+    
+             
+ <div class="toc">
+     
+                <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" x="0px"
+                    y="0px" width="100%" height="100%" viewBox="0 0 10 10" xml:space="preserve">
+                    <g>
+                        <line x1="0" y1="0" x2="10" y2="10" vector-effect="non-scaling-stroke" />
+                        <line x1="10" y1="0" x2="0" y2="10" vector-effect="non-scaling-stroke" />
+                    </g>
+                </svg>
+            <!-- close-button -->
+
+         <h2>Table of Contents</h2> 
+            <ol>
+                <li><a href="#note_to_readers">Note to Readers</a></li>
+                <li><a href="#Day_One">Day One</a></li>
+                <li><a href="#Day_Two">Day Two</a></li>
+                <li><a href="#Day_Three">Day Three</a></li>
+                <li><a href="#colophon">Colophon</a></li>
+            </ol>
+        </div>
+
+        <h2 id="chapter_note_to_readers">
+            <a href="#note_to_readers">Note to Readers</a>
+        </h2>
+
+
+       <p> </p>
+        <p>I.</p>
+        <p> </p>
+
+        <p> This project is based on the work of two people who are far better at writing, walking,
+and coding. First, thank you to Robin Sloan for sharing his code and for making it beautifully simple to mimic his short story format.
+Second, thank you to Craig Mod for publishing his walks through Japan. His ability to demand beauty out of the seemingly simple is something I admire.
+I also want to thank my brother Will for taking the time to edit. This would be completely different and much worse without his help. </p>
+
+               <hr />
+            <p> </p>
+            <p>II.</p>
+            <p> </p>
+
+        <p> I walked for ten hours over three days, not too little, not too much. Two hours on Friday, four hours on Saturday, and four hours on Sunday. 
+            I am not a fast walker and was deliberately slow. I spent most of the walk 
+            craning my neck to look up at the sheer variety of houses of all shapes and sizes; Chicago is full of them. </p>
+<p> I started near my apartment, walking under leafy canopies along streets lined with
+oak trees and passing through the in between places that help delineate different neighborhoods. I didn’t have to venture far, 
+there was so much to see within a few a steps of my front door. Looking back, I wish I had stayed even closer; 
+I could have spent ten hours walking five square blocks around my apartment and left still looking for more. </p>
+        
+<p>This specific walk was inspired by this guy, <a href="https://craigmod.com">Craig Mod</a>. Craig goes on long walks through Japan 
+journeying around with a kind of accidental elegance. He stops to talk to people, ducks into coffee shops,
+tries pizza toast, and smokes cigarettes with stodgy locals. He walks without any real destination, 
+he’s not going to buy groceries, or drop off the mail, the walk is the point and the purpose. Craig is deliberate
+and tries really hard to just pay attention to what surrounds him. 
+I like that. I like the slowness and attentiveness that a walk demands. 
+He’s good enough that he made me want to give it a shot. Slow down and look around, that is. </p>
+
+<p> I lived in Chicago for two years, not long enough to call myself a local but long enough
+to call it home. My first year I lived with two roommates in this big six-flat in Wicker Park, a younger area a couple of miles from the lake. 
+Our apartment backed up to the aboveground Chicago transit system, the El, which would rumble past every 20 minutes, throwing off sparks and 
+a great grinding screech that I never learned how to fully sleep through. The front of the apartment looked out into Wicker Park. 
+We would spend our Saturday mornings at this little tex-mex diner less than a block away. We would wake up, 
+go put our name on the waitlist and go back home to drink coffee, sitting on the couch until our names were called. </p>
+        
+<p>My second year I lived off of Roscoe Street in Lakeview East, maybe a block
+away from the lake, sandwiched between Boystown and the multi-million dollar homes that sit on tree lined avenues
+right up against Inner Lake Shore Drive. My apartment was small but had this dusty exposed brick that was 
+old enough you could hammer nails directly into it without beinding the nail. There was a protruding bay window that sat just above 
+head height looking out onto the sidewalk. My friends would jump up and down and wave at me eating dinner when they walked past. 
+Both places felt like healthy neighborhoods sandwiched between other healthy neighborhoods.
+Both places had decidedly quirky vibes: quirky houses, quirky people, great house, great people. </p>
+        
+<p>Despite commercialization the neighborhoods still had a true feeling of vibrancy to them. 
+They weren’t covered in new buildings and coffee shops composed of seamless curves, light wood, and round 
+hanging globe lights above an old fashioned lettered sign advertising a $6.50 oatmilk latte. </p>
+
+<p> I digress. </p>
+        
+<p>So, in early June 2023 I went on a walk. It was not too long and not too short. I tried my hardest to stay focused on what was around me – what I was seeing. The following is the result: 10 hours, 27.83 miles, 78 voice memos.
+It felt good, it felt really good. </p>
+
+
+        <hr />
+
+        </p>
+
+        <p> The goal was to look closer, to poke my head in everywhere that looked
+interesting, to notice the weird, the deliberate, and the accidental. </p>
+
+
+
+        <p></p>
+
+
+        <p class="spacetime">Henry Gunderson<br />
+            Chicago, Illinois<br />
+
+
+        <div>
+            <img src="img/10.jpg" alt="" />
+        </div>
+
+        <h1 id="The Walk">The Walk</h1>
+
+       
+        <div>
+            <img src="img/3.jpg" alt="" />
+        </div>
+
+     
+        <h2 id="Day_One">
+            <a href="#Day_One">Day One</a>
+
+        </h2>
+
+        <p style="text-align:center"> 2 Hours | 5.62 Miles </p>
+     
+        <hr>
+
+
+<p> <small> At 5pm on Friday I started walking. </small>
+
+<p> Six steps to get outside, take a right out my door into the hallway, then down five steps down the stairs and out the door. I turned the corner off my street, Roscoe, onto Broadway, the long stretch of small shops that sit less than a block away from the lakefront. The entirety of Chicago seemed ready for Friday. Groups of three or four sat planted outside with a beer and fries, starting their summer weekends in shorts and t-shirts, sun dresses and Cubs baseball caps. </p>
+
+<p>Barely two blocks in I wanted to plop down for a beer and pizza. I walked past small to-go spots - Nepalese, Indian, mini donuts - a coffee shop I tend to haunt that’s been around since the 70’s with big barrels of coffee that the barista scoops into a paper bag before weighing your order by the pound. The place is slightly cluttered and a little bit dusty. It has a goliath espresso machine that steams and hisses behind the counter manned by a small army of baristas that perpetually flit behind it like bees pollinating a flower.
+</p>
+
+<p>People were out doing things. The absence of motion coupled with the abundance of sameness can make the suburbs depressing, while the liveliness and raw vitality of my neighborhood is exactly what makes it feel so good. My neighborhood was full of motion, people walking by, popping in, and hanging out. Four blocks from where I used to live was a tiny jittery organism, stuffed full of people grabbing coffee, swinging by the store to pick up a six pack for a party tonight, or on their way to a baseball game 
+</p>
+
+<p>Further on, sandwiched between modern flats is quirky old wooden house with a
+massive turret that has been filled with plants. A little further is a renovated Church that sits off a side street, partially shaded and repurposed into a beautiful three or four unit loft-style apartment. 
+</p>
+
+<p>I think that we put a little piece of ourselves in
+where we live – we imprint some part of who we are and pass it on. In the final episode of
+F.R.I.E.N.D.S. they all leave their keys on the table, a living space shapes and defines how we interact with each other and the world. I think about the memories that have been imprinted into the woodwork. I can feel it when an apartment has good bones. Walking down these streets reminds me of how many lives are being lived in parallel, stacked on top of each other. Chicago is full of in-between places. I am not exactly sure why, but you can find them here in spades.
+</p>
+
+<p>I walked down a street filled with stately brownstones and an older man slowly walking his Golden Retriever. I took a left and was suddenly next to a giant Home Depot and Guitar Center. I am perpetually intrigued by Guitar Center as a concept. How does it stay in business? It is a big cavernous carpeted retail space that transports me back to the early 2000’s whenever I step inside. The very size and scale of these kinds of stores  feels detrimental to the neighborhood. It eliminates an entire block of what could have been mixed use buildings, with small storefronts on the first floor and apartments stacked on top. I understand the utility of having a Home Depot in my neighborhood, but almost wish it was still relegated to the suburbs, and we had a compact little Ace Hardware in its place (the Ace Hardware next to Rocks on Lakeview is exactly what I am thinking of). 
+</p>
+
+<p>I walked past Parrot’s Bar and Grill, a dive with the classic carpeted floor, cheap, lightly
+felted pool tables, and even cheaper Old Style beers ($3!?). The funny thing, and the reason I noticed it, is that people were hanging out at 5:45pm on a Friday - post office workers starting their weekend, small groups of 4-6 shooting a game of pool with beers before dinner, and a couple of folks who had clearly been there since earlier in the afternoon. It was not well decorated, no ambiance, and didn’t seem even remotely thoughtfully designed, but people were there, giving it the liveliness that a neighborhood bar needs. 
+</p>
+
+<p>Down Clark St, a major artery on the North Side, is DePaul, surrounded by all of the establishments that pop up around a university area. People skew younger, just slightly. I live in a young area, but it's filled with folks who have jobs, and are maybe a couple years out of school. The college kids were all starting their nights too, clustered in groups of three or four at different points around the five-way intersection, where the gates of DePaul are placed. If I had to hazard a guess at their, I would say fewer bars and more house parties, where the birthdate on your ID doesn’t hold as much weight. I passed by a seedy liquor store that seemed to serve a broad swathe of the campus population, 21 or otherwise.
+</p>
+
+<div>
+    <img src="img/11.jpg" alt="" />
+</div>
+
+<p>I just crossed the street for a pink turret. It’s at odds with the rest of the building. It has a normal red brick base, with several bright pink bump outs sitting haphazardly on top, faded and worn. They clearly haven’t been repainted, and the paint is chipped and peeling. It sticks out like a sore thumb. I love this worn down pink house just off the main street. It has no reason to be pink, it doesn’t fit in at all. I imagine that the owner must have been bored one Saturday and realized that he had a couple cans of pink paint left over from an interior room. One Saturday, maybe 15 years later and here I am, looking up at it as people brush past me on the sidewalk. I want to knock on the door and tell the owner “Way to go! Way to keep this thing pepto-bismal pink for all these years, keep it up!” 
+</p>
+
+<p>I walked through Lincoln Park tonight. It’s also very alive but in a more refined way than my neighborhood. Neither one is gritty, but Lincoln Park feels curated. Every home is well decorated and freshly painted, with those new pendant lamps hanging over the dining table and big clean windows and highly manicured front lawns. In Chicago, it’s where lawyer parents
+who want to raise their kids in the city would reside. It’s where someone with a name brand stroller would show it off by jogging with their baby, a golden retriever named something like Harley or Scout trotting alongside. Lincoln Park feels like a place that wants you to know its residents are wealthy without being ostentatious. 
+</p>
+
+<p>End of Day 1 – It feels like the sun is hitting everything perfectly, a golden light that filters
+down to bathe the sidewalks in a sunset glow. Damn everybody looks happy. 
+</p>
+        
+        <hr/>
+        
+        <div>
+            <img src="img/8.jpg" alt="" />
+        </div>
+         
+        <h2 id="Day_Two">
+            <a href="#Day_Two">Day Two</a>
+        </h2>
+        
+        <p style="text-align:center"> 4 Hours | 11.30 Miles </p>
+        <hr>
+        
+        <p> <small> I wasn’t sore today, not really. </small>
+
+<p>I was a bit slow getting up but left my house around 9am. I walk outside, take a left, and walk the half a block down Roscoe before taking another left onto Broadway Street. I walk past La Biznaga, a no frills taco spot that lets you bring your own beer and gives you an ice bucket to put it in free of charge. I almost never walk north since my friends live towards Lincoln Park, my work is downtown, or I was making the trek from Wicker Park to Lakeview. 
+</p>
+
+<p>There’s a massive iHop right across from another breakfast spot maybe five blocks away, I can’t believe I didn’t know about it earlier. A shame! Another block or two onward
+and I pass small neighborhood pubs, places that don’t show up on a single “Top 10” list, that look well-worn but not worn down. Cared for. Whenever I find the short, stubby, inbetween streets, the ones that hook a bit and directions apps never really route through, I feel this urge to follow them down. They don’t really connect to anything and often twist left or right. They are out of the way, out of sight, and oh so easy to walk past.
+</p>
+
+<p>I like those streets, and today, whenever I saw what I thought might be one, I would stop and turn, trying to peer down to the end. These streets are inadvertent little gems, since nobody passes through them to get to another major intersection. In the online directions era, they’ve been quietly erased since nobody ever routes them down these ways. I imagine the residents don’t mind one bit. I am now past North Halstead and well into Uptown. I just passed a flat that would be completely and utterly normal if not for the time someone spent tiling the entire front entrance with small, 2x2 inch porcelain tiles. I imagine that an old guy who lived here for years slowly formed the idea of tiling the entire front entryway, picturing and rolling it around in his mind before successfully lobbying the landlord. He probably spent days tiling, mixing his own caulk, and sitting down heavily into a ratty old lawn chair at the end of the day, drinking cheap light beer grabbed out of the dirty coleman cooler sitting within an arms reach. 
+</p>
+
+<p>There are so many houses here that are completely out of touch with their environment, spanish style buildings, Italian columns, in all manner of shape and size and I can’t get enough of it. It makes me feel like I’m constantly walking around a city that has been layered with easter eggs for me to discover. I push further into Uptown. A guy yells at me when I walk past him, just a yell. Pushing sound out of his mouth. I speed up a bit, it’s ten in the morning, I’m not quite sure what’s up. Uptown is a blend of cultures. There are signs in Korean and Spanish all over. I stop in a newly opened taco shop at 11am and get a birria taco with goat meat. Just one, I ate earlier, but the sign was calling to me and the taco was warm and fresh. It was just me and an old gentleman who was talking to people behind the counter in rapid fire Spanish as they prepped for a lunch rush. They brought me napkins and seemed surprised that I only
+wanted one taco. 
+</p>
+
+ <p>“Just one?” They asked. …”Really?”“Really,” I said, “just one, I just want to try it.”
+Outside of the Uptown Post Office sit two massive granite eagles. They are
+sculpted in a fierce art-deco style, sweeping straight lines, each maybe five ft tall. I had to stop and look at them, two massive birds, seemingly chiseled in the rough outline of an eagle. For some reason it felt like the extension of an empire. Here, where we send our mail, are two imposing creatures that flank something as simple as a post office. On we go. The rest of Uptown is interesting, the road itself is big and busy, something that does not lend itself to strong community building. Still, at 11am, I was passing people left and right. It seems that despite everything working against it, Uptown is alive and well. 
+</p>   
+
+<p>On the corner, just before I turned off the main drag onto the side streets, I came across what looked like a former German style house – something that would have had long oak tables inside and sold two types of beer: dark and light. The outside was all shingles and with white contrasting beams with dark windows. It’s now a Vietnamese Church. it shouldn’t make sense but somehow it does. It’s a new generation of immigrants repurposing what the previous generation brought with them. The old Schlitz beer insignia built into the top of the building adds even more character.
+</p>
+
+            <div>
+                <img src="img/4.jpg" alt="" />
+            </div>
+    
+        
+<p>I popped through Summerfest up in Avondale. It was very Swedish, very very Swedish. People were outside milling about, walking through the fest and stopping at local stalls. Summer in Chicago is a frenzy of activity. Everyone is outside as much as possible, trying to soak in the sun and develop a little color. Everyone packs as much as possible into the short few months when the weather is tolerable.
+</p>
+
+<p> I bought a cookie from a hip bakery that was tastefully decorated, all clean lines and light wood finishing. The cookie had smelled  (an oatmeal-like grain) and was thick and nutty and chewy. It was hefty and filling and the perfect midday snack. I stopped in a small bodega and started chatting with the owner. The shop was 10X15 ft, maximum, stocked with brands that she knew and loved. She moved here from New York a couple of years ago and seemed so proud of what she had built. She should be. She brings in new, up-and-coming brands and shares them with her community, and in turn the community supports her. </p>
+
+<p>I walked out of Summerfest and started to meander home, a couple of miles. It still felt early in the day and already I wanted a cold beer. I stopped and sat on a bench and watched people eat lunch on their balconies, sunlight glancing off pale arms that hadn’t seen sun for an entire winter. So many dogs! Golden retrievers seem to be the norm. I looked at old Victorian houses, built 3 or 4 four stories tall, tightly packed into small narrow lots, squeezing every ounce of space out of the building, but leaving room for beautiful decorative siding. I looked at people slowly amble past, drinking iced coffee, little droplets of water condensed on the outside of their plastic cups, just like the sweat on their owners.
+</p>
+        <p> I walked home grateful. </p>
+        
+            
+
+        <hr/>
+
+        <div>
+            <img src="img/6.jpg" alt="" />
+        </div>
+
+      
+
+        <h2 id="Day_Three">
+            <a href="#Day_Three">Day Three</a>
+        </h2>
+
+        <p style="text-align:center"> 4 Hours | 11.12 Miles  </p>
+        <hr>
+
+        <p><small>Final Day! </small>
+        
+<p>I was sore waking up and slow out the door. It was a gloomy Chicago Sunday, rain pitter-pattering down, with people scurrying past my first-floor windows hunched under umbrellas. It was warm rain, but rain all the same, and I didn’t want to walk around in wet shoes for four hours. I would have preferred to drink coffee and read inside, warm and dry. It is Chicago in the summer so many people are still outside, despite the wetness. 
+</p>
+
+<p>I don’t own an umbrella, so the hood of my rain jacket saw a lot of use. All I could do was try and peer out from under the long hood without getting droplets of water in my eyes. I walked past a house that was covered in weeds. It looked worn down with peeling
+paint and a slightly sagging front stoop. The rain added to the gloominess of it. There was
+a bony arm peeking through the dusty window, attached to someone I couldn’t quite see.
+</p>
+
+<p>More walking, putzing, trying to avoid the rain. I stopped in a coffee shop for a latte and sat by the window, shaking water droplets everywhere, and watching people coming and going. It’s gotten annoyingly cold, windy and overcast, but damn, just walking around reminds me how much I love this city. 
+</p>
+
+<p>Some older houses have a family coat of arms above a sill, worn down if it was made of  wood, or slightly less emphasized if it was stone. A lot of care has gone into these buildings over the years. I walk past a front porch with a lone chair positioned just to look out onto the street, with a left hand side table at the perfect height for a coffee in the morning or a cold beer while the sun sets. </p>
+
+<p>I love neighborhoods where people are trying. Someone painted their handrail to
+match the door color, and trust me, it was not professionally done. 
+</p>
+
+<p>I’m at a big intersection out front a public school with a separate boys and girls entrance carved in marble above the doors. A relic from a different time. It’s a quiet neighborhood, well cared for, and mostly full of younger families. </p>
+
+<p>I’m now pushing down Damen Avenue, towards my old house. I always used to bike
+this at night to go hang out with my girlfriend. It’s different walking it. I’ve never walked it before. I used to pass this massive park with a public pool in the back and a whole set of baseball and softball fields in the front. There are so many families and kids out here, all of them dressed in matching uniforms. Nobody seems to be in charge. One kid is playing with his glove, another is picking his nose in the outfield. It’s exactly what kids' sports are supposed to be, uncoordinated. 
+</p>
+
+<p>The row houses surrounding the park are marked by signs of different elementary schools, and the sidewalks have been marked by chalk drawings and hopscotch, the squares slowly getting eaten away by the rain. There are plastic toys strewn all over yards. One of those little red and yellow carts is tipped over on its side, a casualty next to a new toy. This neighborhood is well lived in, simple, and sweet. </p>
+
+<p>The busy streets suck all the life out of a neighborhood, they just become these liminal places, where people, inside their vehicles, are constantly being shuttled through, rather than stopping. I can’t hear anything other than that constant murmur of cars whizzing by at 40 or 45 miles per hour. I keep on walking. I think part of what I am attracted to as I walk around is this sense of place, of rootedness, that I see all around me. People taking the time to grow flower boxes, to figure out exactly where they should go for the optimal drink and snack access while still getting a great view of the  street. The sense of place shows up in the hand-painted lettering above a house, a sign that someone has chosen it themselves with plans to be there for quite a while. The irony is that everything I am doing right now is the opposite. I am completely mobile right now, moving from one nice part of the city to another, then after another year, moving from one nice part of one city to one nice part of a whole different one.
+</p>
+
+<p>My Saturdays are spent the same way pretty much everywhere, walking through the
+local farmers market, buying an overpriced coffee, and then hanging out in a park before going to loud bars designed for me and everyone else in their early twenties.
+</p>
+
+<p>I could get dropped into almost  any city in the US and do the same things. 
+</p>
+
+<p>There is an episode in one of my favorite tv shows,  Parks and Recreation about this guy that the main character, Leslie Knope starts dating (Season 2, Episode 13) who is named Justin. Justin has amazing stories about all of the adventures he has been on, but at the end of a later episode (Season 2, Episode 16) she realizes that ultimately he is just a story collector. He never stays in any place long enough to be truly rooted,to take the risk and learn what it means to dig in and commit. </p>
+
+<p>I think so much of what I spend time on is thinking about what is next. This started in high school, when I began thinking about college in sophomore year, then in college it was always about your next internship, next semester, and next job. Working in a company, the focus seems to constantly be centered on one upping yourself. How do you make yourself and your company more money and what are we doing next quarter, next year for our growth strategy? Nobody is asking why we’re growing, what the real purpose is. It feels like movement for movement’s sake.</p>
+
+<p>I walked past a bar today from 1950 that has been hosting people for 73 years. Everything has a lifecycle, and it is important that I focus on improving, on continuing to try,  but, walking made me think about what forward motion is supposed to mean. How do I define a step forward? How do I define progress? There is value in becoming rooted to a place and becoming part of that community. I worry that I am too flighty, willing to jump or move to the next thing when I get bored. I have the ability in today’s world to do that.</p>
+
+            <div>
+                <img src="img/12.jpg" alt="" />
+            </div>
+    
+        <p> Walking home, I think about what it would mean to become
+a regular at my local bar, Monsignor Murphy’s for years, to use the same squeaky shopping cart at the same Jewel Osco, to eat the same cinnamon rolls from Ann Sather every time I have a guest in town. I think about what it would mean to watch seasons change here and to do it multiple times. I want to know what August day signals the end of summer and ushers in the arrival of fall. I wonder what it would be like to stay somewhere long enough to really get to know my neighbors, beyond just baking them treats every once in a while. I think about what it would mean to watch friends cycle in and out of the city as they have their own trajectory. I think about what it would feel like to be the friend that remains, rather than the one that moves on. I wonder if I could actually do it, or if the immense pressure I feel to always be moving forward would ultimately trump any sense of place that I could find. I don’t know. </p>
+
+            <div>
+                <img src="img/20.jpg" alt="" />
+            </div>
+    
+        
+        <p> Voice Memo from June 11, 2023 – I think the end name is going to be “Walking in Place”.
+After talking to my brother and girlfriend, the things that I fixated on weren’t so much the quirky architecture, but what makes a place a home, and how you know it when you see it. I focused on it as it relates to moving forward. This idea of constant forward motion as a state of being sometimes ignores the idea that motion doesn’t need to be forward to be positive. The reason this is named “Walking in Place” is because if I took anything away from this experiment, walking past all of these lives, I am reminded of the idea of walking in place. I saw the value of exerting energy, exerting force, exerting time upon a single location, without the desire to leave or run away. It’s often harder to remain in one place, but that is how community develops. It’s hard and I’m not sure I would know how to do it right. I do knowI will continue, no matter where I go, to walk. Hopefully in doing so, I remind myself to dig deeper, put down roots, and try. There is so much here. 
+</p>
+        
+      
+        <div>
+            <img src="img/5.jpg" alt="" />
+        </div>
+
+
+        <h1 id="end">END</h1>
+
+        <h2 id="chapter_colophon">
+            <a href="#colophon">Colophon</a>
+        </h2>
+
+        <p>Editions of this e-book for platforms that support custom typefaces use <a
+                href="http://vollkorn-typeface.com/">Vollkorn</a>, the “free and healthy typeface for bread and butter
+            use” designed by Friedrich Althausen. It is the same typefaced used by Robin Sloan, whose base code I am
+            using.</p>
+
+        <p>I took all of the pictures in this book myself, using inexpensive, disposable, point and shoot cameras. I was
+            intrigued by the idea of using something with limited options and customization, forcing me to pick and choose what was worth photographing. I doubt any true 
+            photographer would say it is good, but I have to admit that I quite like how they came out.</p>
+
+        <p>Again, thank you to <a href="https://www.robinsloan.com/">Robin Sloan</a> for building the framework, html,
+            and CSS and making it available and easy to access. Without his publicly accessible work I would never
+            have been able to build this.
+        </p>
+
+        <p>
+            <img src="img/9.jpg" alt="" />
+        </p>
+
+        <p class="last-page"></p>
+
+      
+    </div> <!-- book -->
+
+    <button class="toc-button">
+        <svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" version="1.1" x="0px" y="0px"
+            width="100%" height="100%" viewBox="0 0 80 40" xml:space="preserve">
+            <g>
+                <rect x="0" y="10" width="5" height="1" />
+                <rect x="0" y="20" width="5" height="1" />
+                <rect x="0" y="30" width="5" height="1" />
+
+                <rect x="10" y="10" width="70" height="1" />
+                <rect x="10" y="20" width="70" height="1" />
+                <rect x="10" y="30" width="70" height="1" />
+            </g>
+        </svg>
+    </button>
+
+</body>
+
+</html>
